@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "uproc.h"
 
 struct cpu cpus[NCPU];
 
@@ -168,6 +169,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->tracemask = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -288,6 +290,7 @@ kfork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+  np->tracemask = p->tracemask;
 
   pid = np->pid;
 
@@ -700,4 +703,57 @@ procdump(void)
     printk("%d %s %s", p->pid, state, p->name);
     printk("\n");
   }
+}
+
+// Return the number of processes whose state is not UNUSED.
+uint64
+nproc(void)
+{
+  struct proc *p;
+  uint64 n = 0;
+
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if (p->state != UNUSED)
+      n++;
+    release(&p->lock);
+  }
+  return n;
+}
+
+// Copy up to max struct uprocs to user address buf.
+// Returns the number copied, or -1 on error.
+int
+getprocs(uint64 buf, int max)
+{
+  struct proc *p;
+  struct uproc u;
+  int n = 0;
+
+  if (max < 0)
+    return -1;
+
+  for (p = proc; p < &proc[NPROC] && n < max; p++) {
+    acquire(&wait_lock);   // wait_lock first, then p->lock (same as kexit/kwait)
+    acquire(&p->lock);
+    if (p->state == UNUSED) {
+      release(&p->lock);
+      release(&wait_lock);
+      continue;
+    }
+    u.pid = p->pid;
+    u.ppid = p->parent ? p->parent->pid : 0;
+    u.state = p->state;
+    u.sz = p->sz;
+    safestrcpy(u.name, p->name, sizeof(u.name));
+    release(&p->lock);
+    release(&wait_lock);
+
+    // Never hold a spinlock across copyout.
+    if (copyout(myproc()->pagetable, myproc()->sz, buf + n * sizeof(u),
+                (char *)&u, sizeof(u)) < 0)
+      return -1;
+    n++;
+  }
+  return n;
 }

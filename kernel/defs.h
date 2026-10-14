@@ -27,6 +27,7 @@ void            consputc(int);
 int             kexec(char*, char**);
 
 // file.c
+uint64          nopenfile(void);
 struct file*    filealloc(void);
 void            fileclose(struct file*);
 struct file*    filedup(struct file*);
@@ -57,6 +58,7 @@ void            itrunc(struct inode*);
 void            ireclaim(int);
 
 // kalloc.c
+uint64          kfreemem(void);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
@@ -79,6 +81,8 @@ void            panic(char*) __attribute__((noreturn));
 void            printkinit(void);
 
 // proc.c
+uint64          nproc(void);
+int             getprocs(uint64, int);
 int             cpuid(void);
 void            kexit(int);
 int             kfork(void);
