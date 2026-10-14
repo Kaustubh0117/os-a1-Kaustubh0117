@@ -10,7 +10,7 @@ static char *states[] = {"unused", "used", "sleeping", "runnable", "running", "z
 int
 main(void)
 {
-  struct uproc procs[NPROC];
+  static struct uproc procs[NPROC];   // static: 64 entries is too big for the 4 KB user stack
   int n = getprocs(procs, NPROC);
 
   if (n < 0) {
